@@ -22,7 +22,8 @@ public class PinnedHeaderExpandableListView extends ExpandableListView
 
 	public interface OnHeaderUpdateListener {
 		/**
-		 * 返回一个view对象即可 注意：view必须要有LayoutParams
+		 * 返回一个view对象即可 
+		 * @must view必须要有LayoutParams
 		 */
 		public View getPinnedHeader();
 
@@ -32,21 +33,21 @@ public class PinnedHeaderExpandableListView extends ExpandableListView
 	/**
 	 * 这个Header就是悬停的Header
 	 */
-	private View mHeaderView;
-	private int mHeaderWidth;
-	private int mHeaderHeight;
+	private View pinHeaderView;
+	private int pinHeaderWidth;
+	private int pinHeaderHeight;
 
 	/**
-	 * 监测这个View
+	 * 在pinHeader布局点击的view
 	 */
-	private View mTouchTarget;
+	private View pinTouchedView;
 
 	/**
 	 * 判断headerView是否被点击
 	 */
-	private boolean mActionDownHappened = false;
+	private boolean isActionDown = false;
 
-	protected boolean mIsHeaderGroupClickable = true;
+	protected boolean isHeaderGroupClicked = true;
 
 	public PinnedHeaderExpandableListView(Context context) {
 		super(context);
@@ -86,24 +87,24 @@ public class PinnedHeaderExpandableListView extends ExpandableListView
 	public void setOnGroupClickListener(
 			OnGroupClickListener onGroupClickListener,
 			boolean isHeaderGroupClickable) {
-		mIsHeaderGroupClickable = isHeaderGroupClickable;
+		isHeaderGroupClicked = isHeaderGroupClickable;
 		super.setOnGroupClickListener(onGroupClickListener);
 	}
 
 	public void setOnHeaderUpdateListener(OnHeaderUpdateListener listener) {
 		mHeaderUpdateListener = listener;
 		if (listener == null) {
-			mHeaderView = null;
-			mHeaderWidth = mHeaderHeight = 0;
+			pinHeaderView = null;
+			pinHeaderWidth = pinHeaderHeight = 0;
 			return;
 		}
 
 		// 这行代码很关键，告诉我们 headerView来自哪
-		mHeaderView = listener.getPinnedHeader();
+		pinHeaderView = listener.getPinnedHeader();
 
 		int firstVisiblePos = getFirstVisiblePosition();
 		int firstVisibleGroupPos = getPackedPositionGroup(getExpandableListPosition(firstVisiblePos));
-		listener.updatePinnedHeader(mHeaderView, firstVisibleGroupPos);
+		listener.updatePinnedHeader(pinHeaderView, firstVisibleGroupPos);
 
 		requestLayout();
 		postInvalidate();
@@ -112,29 +113,29 @@ public class PinnedHeaderExpandableListView extends ExpandableListView
 	@Override
 	protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
 		super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-		if (mHeaderView == null) {
+		if (pinHeaderView == null) {
 			return;
 		}
-		measureChild(mHeaderView, widthMeasureSpec, heightMeasureSpec);
-		mHeaderWidth = mHeaderView.getMeasuredWidth();
-		mHeaderHeight = mHeaderView.getMeasuredHeight();
+		measureChild(pinHeaderView, widthMeasureSpec, heightMeasureSpec);
+		pinHeaderWidth = pinHeaderView.getMeasuredWidth();
+		pinHeaderHeight = pinHeaderView.getMeasuredHeight();
 	}
 
 	@Override
 	protected void onLayout(boolean changed, int l, int t, int r, int b) {
 		super.onLayout(changed, l, t, r, b);
-		if (mHeaderView == null) {
+		if (pinHeaderView == null) {
 			return;
 		}
-		int delta = mHeaderView.getTop();
-		mHeaderView.layout(0, delta, mHeaderWidth, mHeaderHeight + delta);
+		int delta = pinHeaderView.getTop();
+		pinHeaderView.layout(0, delta, pinHeaderWidth, pinHeaderHeight + delta);
 	}
 
 	@Override
 	protected void dispatchDraw(Canvas canvas) {
 		super.dispatchDraw(canvas);
-		if (mHeaderView != null) {
-			drawChild(canvas, mHeaderView, getDrawingTime());
+		if (pinHeaderView != null) {
+			drawChild(canvas, pinHeaderView, getDrawingTime());
 		}
 	}
 
@@ -145,29 +146,29 @@ public class PinnedHeaderExpandableListView extends ExpandableListView
 		int pos = pointToPosition(x, y);
 
 		// 如果滑动 header, 触摸事件被截取，列表不移动
-		if (mHeaderView != null && y >= mHeaderView.getTop()
-				&& y <= mHeaderView.getBottom()) {
+		if (pinHeaderView != null && y >= pinHeaderView.getTop()
+				&& y <= pinHeaderView.getBottom()) {
 
 			if (ev.getAction() == MotionEvent.ACTION_DOWN) {
 
 				// 获取点击的对象：是子控件 or header整体
-				mTouchTarget = getTouchTarget(mHeaderView, x, y);
-				mActionDownHappened = true;
+				pinTouchedView = getTouchTarget(pinHeaderView, x, y);
+				isActionDown = true;
 
 			} else if (ev.getAction() == MotionEvent.ACTION_UP) {
 
-				View touchTarget = getTouchTarget(mHeaderView, x, y);
+				View touchTarget = getTouchTarget(pinHeaderView, x, y);
 				
-				if (touchTarget == mTouchTarget && mTouchTarget.isClickable()) {
+				if (touchTarget == pinTouchedView && pinTouchedView.isClickable()) {
 					//优先处理header中子控件的点击事件
-					mTouchTarget.performClick();
-					invalidate(new Rect(0, 0, mHeaderWidth, mHeaderHeight));
+					pinTouchedView.performClick();
+					invalidate(new Rect(0, 0, pinHeaderWidth, pinHeaderHeight));
 					
-				} else if (mIsHeaderGroupClickable) {
+				} else if (isHeaderGroupClicked) {
 					//处理header的点击
 					int groupPosition = getPackedPositionGroup(getExpandableListPosition(pos));
 					if (groupPosition != INVALID_POSITION
-							&& mActionDownHappened) {
+							&& isActionDown) {
 						if (isGroupExpanded(groupPosition)) {
 							collapseGroup(groupPosition);
 						} else {
@@ -175,7 +176,7 @@ public class PinnedHeaderExpandableListView extends ExpandableListView
 						}
 					}
 				}
-				mActionDownHappened = false;
+				isActionDown = false;
 			}
 			return true;
 		}
@@ -224,14 +225,14 @@ public class PinnedHeaderExpandableListView extends ExpandableListView
 
 	public void requestRefreshHeader() {
 		refreshHeader();
-		invalidate(new Rect(0, 0, mHeaderWidth, mHeaderHeight));
+		invalidate(new Rect(0, 0, pinHeaderWidth, pinHeaderHeight));
 	}
 
 	/**
 	 * header悬停的关键方法
 	 */
 	protected void refreshHeader() {
-		if (mHeaderView == null) {
+		if (pinHeaderView == null) {
 			return;
 		}
 		int firstVisiblePos = getFirstVisiblePosition();
@@ -245,11 +246,11 @@ public class PinnedHeaderExpandableListView extends ExpandableListView
 			if (view == null) {
 				return;
 			}
-			if (view.getTop() <= mHeaderHeight) {
+			if (view.getTop() <= pinHeaderHeight) {
 				//如果发生了两个GroupView的顶撞，则
 				
-				int delta = mHeaderHeight - view.getTop();
-				mHeaderView.layout(0, -delta, mHeaderWidth, mHeaderHeight
+				int delta = pinHeaderHeight - view.getTop();
+				pinHeaderView.layout(0, -delta, pinHeaderWidth, pinHeaderHeight
 						- delta);
 			}
 			/*else {
@@ -258,11 +259,11 @@ public class PinnedHeaderExpandableListView extends ExpandableListView
 			}*/
 		} else {
 			// 如果只有一个GroupView
-			mHeaderView.layout(0, 0, mHeaderWidth, mHeaderHeight);
+			pinHeaderView.layout(0, 0, pinHeaderWidth, pinHeaderHeight);
 		}
 
 		if (mHeaderUpdateListener != null) {
-			mHeaderUpdateListener.updatePinnedHeader(mHeaderView,
+			mHeaderUpdateListener.updatePinnedHeader(pinHeaderView,
 					firstVisibleGroupPos);
 		}
 	}
