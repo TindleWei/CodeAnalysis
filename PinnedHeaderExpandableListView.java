@@ -4,8 +4,6 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.util.AttributeSet;
-import android.util.DisplayMetrics;
-import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -17,8 +15,9 @@ public class PinnedHeaderExpandableListView extends ExpandableListView
 		implements OnScrollListener {
 
 	private static final String TAG = "PinnedHeaderExpandableListView";
-	private static final boolean DEBUG = true;
-	
+
+	private OnScrollListener mScrollListener;
+
 	private OnHeaderUpdateListener mHeaderUpdateListener;
 
 	public interface OnHeaderUpdateListener {
@@ -42,13 +41,11 @@ public class PinnedHeaderExpandableListView extends ExpandableListView
 	 */
 	private View mTouchTarget;
 
-	private OnScrollListener mScrollListener;
-
 	/**
-	 * 监测这个flag
+	 * 判断headerView是否被点击
 	 */
 	private boolean mActionDownHappened = false;
-	
+
 	protected boolean mIsHeaderGroupClickable = true;
 
 	public PinnedHeaderExpandableListView(Context context) {
@@ -85,13 +82,6 @@ public class PinnedHeaderExpandableListView extends ExpandableListView
 	/**
 	 * 给group添加点击事件监听
 	 * 
-	 * @param onGroupClickListener
-	 *            监听
-	 * @param isHeaderGroupClickable
-	 *            表示header是否可点击<br/>
-	 *            note :
-	 *            当不想group可点击的时候，需要在OnGroupClickListener#onGroupClick中返回true，
-	 *            并将isHeaderGroupClickable设为false即可
 	 */
 	public void setOnGroupClickListener(
 			OnGroupClickListener onGroupClickListener,
@@ -107,13 +97,14 @@ public class PinnedHeaderExpandableListView extends ExpandableListView
 			mHeaderWidth = mHeaderHeight = 0;
 			return;
 		}
-		
-		//这行代码很关键，告诉我们 headerView来自哪
+
+		// 这行代码很关键，告诉我们 headerView来自哪
 		mHeaderView = listener.getPinnedHeader();
-		
+
 		int firstVisiblePos = getFirstVisiblePosition();
 		int firstVisibleGroupPos = getPackedPositionGroup(getExpandableListPosition(firstVisiblePos));
 		listener.updatePinnedHeader(mHeaderView, firstVisibleGroupPos);
+
 		requestLayout();
 		postInvalidate();
 	}
@@ -152,20 +143,28 @@ public class PinnedHeaderExpandableListView extends ExpandableListView
 		int x = (int) ev.getX();
 		int y = (int) ev.getY();
 		int pos = pointToPosition(x, y);
+
+		// 如果滑动 header, 触摸事件被截取，列表不移动
 		if (mHeaderView != null && y >= mHeaderView.getTop()
 				&& y <= mHeaderView.getBottom()) {
+
 			if (ev.getAction() == MotionEvent.ACTION_DOWN) {
-				
-				//我得搞清楚这里是干嘛的
+
+				// 获取点击的对象：是子控件 or header整体
 				mTouchTarget = getTouchTarget(mHeaderView, x, y);
 				mActionDownHappened = true;
-				
+
 			} else if (ev.getAction() == MotionEvent.ACTION_UP) {
+
 				View touchTarget = getTouchTarget(mHeaderView, x, y);
+				
 				if (touchTarget == mTouchTarget && mTouchTarget.isClickable()) {
+					//优先处理header中子控件的点击事件
 					mTouchTarget.performClick();
 					invalidate(new Rect(0, 0, mHeaderWidth, mHeaderHeight));
+					
 				} else if (mIsHeaderGroupClickable) {
+					//处理header的点击
 					int groupPosition = getPackedPositionGroup(getExpandableListPosition(pos));
 					if (groupPosition != INVALID_POSITION
 							&& mActionDownHappened) {
@@ -183,6 +182,11 @@ public class PinnedHeaderExpandableListView extends ExpandableListView
 		return super.dispatchTouchEvent(ev);
 	}
 
+	/**
+	 * 这个地方是判断header的点击事件的，
+	 * 尽管我认为作者费劲费神，写的事倍功半，
+	 * 但是还是有可以借鉴的地方
+	 */
 	private View getTouchTarget(View view, int x, int y) {
 		if (!(view instanceof ViewGroup)) {
 			return view;
@@ -190,6 +194,8 @@ public class PinnedHeaderExpandableListView extends ExpandableListView
 
 		ViewGroup parent = (ViewGroup) view;
 		int childrenCount = parent.getChildCount();
+		
+		//我认为这个Boolean多此一举
 		final boolean customOrder = isChildrenDrawingOrderEnabled();
 		View target = null;
 		for (int i = childrenCount - 1; i >= 0; i--) {
@@ -221,6 +227,9 @@ public class PinnedHeaderExpandableListView extends ExpandableListView
 		invalidate(new Rect(0, 0, mHeaderWidth, mHeaderHeight));
 	}
 
+	/**
+	 * header悬停的关键方法
+	 */
 	protected void refreshHeader() {
 		if (mHeaderView == null) {
 			return;
@@ -229,26 +238,26 @@ public class PinnedHeaderExpandableListView extends ExpandableListView
 		int pos = firstVisiblePos + 1;
 		int firstVisibleGroupPos = getPackedPositionGroup(getExpandableListPosition(firstVisiblePos));
 		int group = getPackedPositionGroup(getExpandableListPosition(pos));
-		if (DEBUG) {
-			Log.d(TAG, "refreshHeader firstVisibleGroupPos="
-					+ firstVisibleGroupPos);
-		}
 
 		if (group == firstVisibleGroupPos + 1) {
+			// 如果顶端是两个GroupView相邻
 			View view = getChildAt(1);
 			if (view == null) {
-				Log.w(TAG, "Warning : refreshHeader getChildAt(1)=null");
 				return;
 			}
 			if (view.getTop() <= mHeaderHeight) {
+				//如果发生了两个GroupView的顶撞，则
+				
 				int delta = mHeaderHeight - view.getTop();
 				mHeaderView.layout(0, -delta, mHeaderWidth, mHeaderHeight
 						- delta);
-			} else {
-				// TODO : note it, when cause bug, remove it
-				mHeaderView.layout(0, 0, mHeaderWidth, mHeaderHeight);
 			}
+			/*else {
+				// 其实这个处理完全没有必要，所以去掉了
+				// mHeaderView.layout(0, 0, mHeaderWidth, mHeaderHeight);
+			}*/
 		} else {
+			// 如果只有一个GroupView
 			mHeaderView.layout(0, 0, mHeaderWidth, mHeaderHeight);
 		}
 
